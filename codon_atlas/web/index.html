@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codon Atlas</title>
+<link rel="icon" href="icon.svg">
+<script>try{var t=localStorage.getItem("ca-theme");document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="wrap">
+<header class="top">
+  <div class="bar">
+    <div class="brand"><img src="icon.svg" alt="">Codon Atlas<small id="ver"></small></div>
+    <nav class="tabs" id="tabs">
+      <button data-p="analyze" class="on">Analyze</button>
+      <button data-p="code" data-need="1">Genetic code</button>
+      <button data-p="stops" data-need="1">Stop codons</button>
+      <button data-p="trnas" data-need="1">tRNAs</button>
+      <button data-p="sites" data-need="1">Sites &amp; export</button>
+      <button data-p="batch">Batch</button>
+      <button data-p="runs">Runs</button>
+      <button data-p="db">Database</button>
+      <button data-p="method">Method</button>
+    </nav>
+    <div class="jobchip" id="jobchip" title="Show the running job"><i></i><span id="jobchipText">Working</span></div>
+    <div class="pill" id="themePill" role="group" aria-label="Theme">
+      <button data-t="light" title="Light"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>Light</button>
+      <button data-t="dark" title="Dark"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ================= ANALYZE ================= -->
+<section class="page on" id="p-analyze">
+  <h1>Find alternative decoding in a genome</h1>
+  <p class="lede">Codon Atlas aligns a six-frame translation of the genome to Pfam protein families and asks, for every one of the 64 codons, which amino acid the conserved columns it lands on expect. It also looks for stop codons inside conserved domains, reads the tRNA genes, and lists every affected site.</p>
+  <div class="grid g2">
+    <div class="card">
+      <h2>Genome</h2>
+      <div class="drop" id="drop">
+        <svg width="46" height="46" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--accent)"><path d="M14 6c8 6 12 12 20 18M14 42c8-6 12-12 20-18M14 6c0 0 6 0 20 0M14 42h20M17 12h14M19 18h10M19 30h10M17 36h14"/></svg>
+        <div class="big">Drop a genome here</div>
+        <div class="muted small">FASTA or GenBank (.fna .fa .gb .gbff, gzip OK). GenBank gene annotation is used when present; otherwise genes are predicted.</div>
+        <div style="margin-top:14px"><button class="btn" id="pickBtn">Choose file…</button></div>
+      </div>
+      <div class="fileinfo" id="fileinfo">
+        <div class="row"><b id="fiName"></b><span class="spacer"></span><button class="btn sm" id="fiClear">Change</button></div>
+        <div class="muted small" id="fiOrg" style="margin:2px 0 12px"></div>
+        <div class="stats" id="fiStats"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="grid g2" style="gap:12px">
+        <label class="field">Profile set<select id="sProfiles"></select></label>
+        <label class="field">Reference code (for differences)<select id="sTable"></select></label>
+        <label class="field">Domain E-value cutoff<input id="sEvalue" type="text" value="1e-10"></label>
+        <label class="field">Decoding probability threshold<input id="sThr" type="text" value="0.9999"></label>
+      </div>
+      <h3 style="margin-top:16px">Leave out families that often mislead inference</h3>
+      <div id="sExclude" class="small"></div>
+      <details style="margin-top:8px" class="small"><summary class="muted">More</summary>
+        <div class="grid g2" style="gap:12px;margin-top:10px">
+          <label class="field">Bootstrap resamples per codon<input id="sBoot" type="number" value="200" min="0" max="2000"></label>
+          <label class="field">Max share of one column per codon<input id="sCap" type="text" value="0.01"></label>
+          <label class="field">Min alignment posterior<input id="sPP" type="text" value="0.95"></label>
+          <label class="field">Threads (0 = all but one)<input id="sCpus" type="number" value="0" min="0"></label>
+        </div>
+      </details>
+      <div class="row" style="margin-top:18px">
+        <span class="muted small" id="dbNote"></span><span class="spacer"></span>
+        <button class="btn primary" id="runBtn" disabled>Analyze genome</button>
+      </div>
+    </div>
+  </div>
+  <div class="card progress" id="progress" style="margin-top:18px">
+    <div class="row"><b id="pMsg">Starting…</b><span class="spacer"></span><span class="muted small" id="pEta"></span><button class="btn sm danger" id="stopBtn">Stop</button></div>
+    <div class="track" style="margin-top:12px"><i id="pBar"></i></div>
+    <div class="ribbon" id="ribbon"><span></span></div>
+    <div class="err" id="pErr"></div>
+  </div>
+</section>
+
+<!-- ================= GENETIC CODE ================= -->
+<section class="page" id="p-code">
+  <div class="hero">
+    <div style="flex:1;min-width:300px">
+      <div class="muted small" id="rRun"></div>
+      <h1 id="rTitle">—</h1>
+      <div class="muted" id="rSub"></div>
+    </div>
+    <div class="stats" id="rStats"></div>
+  </div>
+  <div class="card" style="margin-bottom:18px">
+    <div class="row" style="margin-bottom:10px"><h3 style="margin:0">Inferred code</h3><span class="muted small">64 codons in NCBI order (TTT … GGG). Highlighted letters differ from the reference; ‘?’ = not inferred.</span></div>
+    <div class="codestr" id="rCode"></div>
+    <div class="row" style="margin-top:14px"><b class="small">Called reassignments</b><div class="chips" id="rHyp"></div></div>
+    <div class="row" style="margin-top:8px"><b class="small">Leads below threshold</b><div class="chips" id="rLeads"></div></div>
+    <div class="row" style="margin-top:8px"><b class="small">tRNA identity flags</b><div class="chips" id="rTflags"></div></div>
+  </div>
+  <div class="grid g-wheel">
+    <div class="card wheelbox">
+      <div class="seg-tabs" id="viewTabs"><button data-v="wheel" class="on">Wheel</button><button data-v="table">Table</button></div>
+      <div id="wheelHost"></div>
+      <div id="tableHost" style="display:none"></div>
+      <div class="legend"><span><i style="background:var(--np)"></i>nonpolar</span><span><i style="background:var(--po)"></i>polar</span><span><i style="background:var(--ac)"></i>acidic</span><span><i style="background:var(--ba)"></i>basic</span><span><i style="background:var(--stop)"></i>stop / ?</span><span><i style="background:var(--warn)"></i>differs from reference</span></div>
+    </div>
+    <div class="card" id="detail"></div>
+  </div>
+</section>
+
+<!-- ================= STOPS ================= -->
+<section class="page" id="p-stops">
+  <h1>Stop codons inside conserved domains</h1>
+  <p class="lede">Every TAA, TAG and TGA that sits on a confidently aligned consensus column of a Pfam domain. Many in-domain stops of one kind across many families mean a reassigned stop codon; a handful in specific families suggest selenocysteine, pyrrolysine, readthrough, or pseudogenes.</p>
+  <div class="grid g3" id="stopCards"></div>
+  <div class="card" style="margin-top:18px">
+    <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Positions</h2><span class="spacer"></span>
+      <select id="stopFilter"><option value="">All codons</option><option>TAA</option><option>TAG</option><option>TGA</option></select>
+      <input type="text" id="stopSearch" placeholder="Filter by family or gene" style="width:220px"></div>
+    <div class="scroll"><table class="tbl" id="stopTbl"></table></div>
+  </div>
+</section>
+
+<!-- ================= tRNAs ================= -->
+<section class="page" id="p-trnas">
+  <h1>tRNA genes</h1>
+  <p class="lede">Found with ARAGORN. Each anticodon is matched to the codons it can pair with (Watson–Crick and wobble). For tRNAs with arginine anticodons, identity elements are read as in Shulgina &amp; Eddy (2021): A20 and the discriminator base N73 separate Arg-, Trp-, Met- and Gln-type acceptors. Positions are found by a structural heuristic, so treat calls as leads.</p>
+  <div class="card"><div class="scroll"><table class="tbl" id="trnaTbl"></table></div></div>
+</section>
+
+<!-- ================= SITES ================= -->
+<section class="page" id="p-sites">
+  <h1>Sites &amp; export</h1>
+  <p class="lede">Pick a decoding hypothesis to list every in-frame site in the genes, with sequence context and, where the site falls in a Pfam domain, what that column expects. The database package names the hypothesis as codon-2-amino-acid (for example TGA2W) and is ready for a proteomics search, for example with Recode Detector.</p>
+  <div class="card">
+    <div class="row">
+      <label class="field">Codon<select id="hCodon"></select></label>
+      <span style="font-size:22px;margin-top:16px">→</span>
+      <label class="field">Read as<select id="hAa"></select></label>
+      <button class="btn" id="hAdd" style="margin-top:16px">Add to package</button>
+      <button class="btn primary" id="hShow" style="margin-top:16px">List sites</button>
+      <span class="spacer"></span>
+      <div style="margin-top:16px" class="row">
+        <button class="btn" id="dlTables">Tables (.zip)</button>
+        <button class="btn" id="dlReport">Report (.html)</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px"><b class="small">Package hypotheses</b><div class="chips" id="hList"></div><span class="spacer"></span><button class="btn primary" id="dlPkg">Download protein database package</button></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div class="row" style="margin-bottom:10px"><h2 style="margin:0" id="siteTitle">Sites</h2><span class="spacer"></span><span class="muted small" id="siteNote"></span></div>
+    <div class="scroll"><table class="tbl" id="siteTbl"></table></div>
+  </div>
+</section>
+
+<!-- ================= BATCH ================= -->
+<section class="page" id="p-batch">
+  <h1>Batch screen</h1>
+  <p class="lede">Run many genomes with the settings on the Analyze page and rank them: called reassignments first, then the strongest leads below threshold and tRNA identity flags. Click a row to open its full result.</p>
+  <div class="grid g2">
+    <div class="card">
+      <div class="drop" id="bdrop">
+        <div class="big">Drop genome files or a folder list here</div>
+        <div class="muted small">Or choose them below. Files stay where they are; only their paths are used.</div>
+        <div class="row" style="justify-content:center;margin-top:14px"><button class="btn" id="bFiles">Choose files…</button><button class="btn" id="bFolder">Choose folder…</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Queue</h2>
+      <div id="bQueue" class="small muted">No genomes chosen.</div>
+      <div class="row" style="margin-top:14px"><input type="text" id="bName" placeholder="Batch name (optional)" style="flex:1"><button class="btn primary" id="bStart" disabled>Start batch</button></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div class="row" style="margin-bottom:10px"><h2 style="margin:0" id="bTitle">Results</h2><span class="spacer"></span><span class="muted small" id="bProg"></span><button class="btn sm" id="bExport" disabled>Table (.tsv)</button></div>
+    <div class="scroll"><table class="tbl" id="bTbl"></table></div>
+  </div>
+</section>
+
+<!-- ================= RUNS ================= -->
+<section class="page" id="p-runs">
+  <div class="row"><h1>Runs</h1><span class="spacer"></span><button class="btn sm" id="revealRuns">Show in Finder</button></div>
+  <p class="lede">Every analysis is saved automatically with its settings and can be reopened here.</p>
+  <div class="card"><div class="scroll" style="max-height:none"><table class="tbl" id="runsTbl"></table></div></div>
+</section>
+
+<!-- ================= DATABASE ================= -->
+<section class="page" id="p-db">
+  <h1>Profile database</h1>
+  <p class="lede">Codon Atlas needs Pfam once. The recommended set is rebuilt from Pfam's seed alignments without entropy weighting (as Codetta does), which keeps each column's amino-acid probabilities close to what the seed alignment shows.</p>
+  <div class="card" id="dbCard"></div>
+</section>
+
+<!-- ================= METHOD ================= -->
+<section class="page method" id="p-method">
+  <h1>How it works</h1>
+  <p>Codon Atlas re-implements the inference model of <b>Codetta</b> (Shulgina &amp; Eddy, <i>eLife</i> 2021; Codetta 2.0 in Shulgina's 2022 thesis) and adds stop-codon, tRNA and site-level views.</p>
+  <ol>
+    <li><b>Six-frame translation.</b> The genome is cut into 100 kb pieces (3 kb overlap) and translated in all six frames with the standard code, stop codons written as X so nothing is assumed about them.</li>
+    <li><b>Alignment.</b> Pfam profile HMMs are searched against the translation with HMMER (pyhmmer). Domains with independent E-value below 10<sup>−10</sup> are kept (E-values scaled to the number of profiles, as in hmmscan), and within them only consensus columns aligned with posterior probability ≥ 0.95.</li>
+    <li><b>One column per codon.</b> Each genomic codon keeps the column from its most significant domain. Families of mobile elements, viruses, selenoproteins, pyrrolysine proteins and mitochondrion-encoded proteins are left out of inference by default (identified by name and description).</li>
+    <li><b>Decoding probabilities.</b> For codon Z with aligned columns C<sub>1</sub>…C<sub>N</sub>, each amino-acid model <i>a</i> and the non-specific model ‘?’ score
+      <div class="eq" style="margin:8px 0">log P(C | a) − log P(C | ?) = Σ<sub>i</sub> w<sub>i</sub> [ log e<sub>C<sub>i</sub></sub>(a) − log ē(a) ]</div><br>
+      where e is the column's emission probability and ē(a) its average over every aligned column in this genome; w caps any single column at 1% of the codon's columns (each unique column once below 100). With a uniform prior over the 21 models the scores become probabilities; a codon is called when one amino acid exceeds 0.9999.</li>
+    <li><b>Stability.</b> The capped columns are resampled (bootstrap) and the share of resamples that keep the same best model is shown as <i>support</i>, which matters most for rare codons.</li>
+    <li><b>Leads.</b> When no model passes the threshold, the ratio between the best alternative amino acid and the standard one is still reported, so weak signals in rare codons are not lost.</li>
+    <li><b>Stop codons.</b> Every stop codon on an aligned consensus column is listed with what the column expects (all families, including the excluded ones, so selenoproteins and pyrrolysine proteins show up here).</li>
+    <li><b>tRNAs.</b> ARAGORN (pyaragorn) finds tRNA genes; anticodons are matched to codons with standard wobble rules (G34: C/U, U34: A/G, C34: G, A34 read as I34: U/C/A). For arginine-anticodon tRNAs, A20 and N73 give Arg/Trp/Met/Gln-type calls.</li>
+    <li><b>Sites.</b> In-frame occurrences in annotated (GenBank) or predicted (Prodigal) genes, with context and the Pfam column's probabilities for the standard and the alternative residue.</li>
+  </ol>
+  <p class="muted small">Known sources of error (from Codetta's authors): profile alignments to pseudogenes or non-coding sequence, extensive mRNA editing, and strongly unusual amino-acid composition. A predicted code is a hypothesis to test, ideally experimentally.</p>
+  <p class="muted small">Software: HMMER 3 via pyhmmer (Larralde &amp; Zeller 2023), Pfam (Mistry et al. 2021), ARAGORN via pyaragorn (Laslett &amp; Canback 2004), Prodigal via pyrodigal (Hyatt et al. 2010; Larralde 2022).</p>
+</section>
+<footer>Codon Atlas · runs entirely on this Mac · <span id="footVer"></span></footer>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+<script src="bg.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# built app bundles and releases
+*.app/
+*.zip
+*.dmg
+# Python and test caches, environments
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+# data and outputs (Pfam, runs, genomes, results) never belong in the repo
+*.hmm
+*.h3?
+*.npy
+*.seed
+*.gz
+*.gb
+*.gbk
+*.gbff
+*.fna
+*.fa
+*.fasta
+result.json
+runs/
+tests/_out/
+*.log
+.DS_Store
+.env
