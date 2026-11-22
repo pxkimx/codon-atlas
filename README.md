@@ -63,6 +63,14 @@ HMMER via pyhmmer (Larralde & Zeller), Prodigal via pyrodigal, ARAGORN via pyara
 Pfam (Mistry et al. 2021; CC0) are downloaded at first use under their own licences; none
 are included here.
 
+## Changes
+
+- **0.1.1 (2026-11-22)** — Security fix. The server answered any page that could reach `127.0.0.1:8784`: a web page
+  on another site could delete runs, and a run id of `..` pointed at the whole data folder (Pfam, the Python
+  environment, every saved run). Requests now have to come from this Mac's own browser (Host and Origin are
+  checked, as in CRISPR HTS Validator) and a run id must be one folder name. `tests/test_server.py` covers both.
+- **0.1.0 (2026-10-29)** — First release.
+
 ## Licence
 
 MIT, see `LICENSE`.

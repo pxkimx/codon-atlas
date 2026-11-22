@@ -135,10 +135,11 @@ def _new_id(prefix: str) -> str:
 
 
 def run_dir(run_id: str) -> Path:
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id or ""):
+    """The folder of one run. A run id is a single folder name under RUNS: never ".", ".." or a path."""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id or "") or set(run_id) <= {"."}:
         raise ValueError("Unknown run.")
     d = RUNS / run_id
-    if not d.is_dir():
+    if d.resolve().parent != RUNS.resolve() or not d.is_dir():
         raise ValueError("That run no longer exists.")
     return d
 
@@ -412,6 +413,20 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _local_only(self) -> bool:
+        """Only this Mac's own browser may talk to the server: a page on another site (its Origin) or a request that
+        reached us through another host name (DNS rebinding) is refused. The server binds to 127.0.0.1, but a
+        browser will happily send a cross-site POST there."""
+        origin = self.headers.get("Origin") or ""
+        host = (self.headers.get("Host") or "").split(":")[0]
+        if host not in ("localhost", "127.0.0.1"):
+            return False
+        return not origin or re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) is not None
+
+    def _forbid(self):
+        self.close_connection = True
+        self._send(403, b"forbidden", "text/plain")
+
     def _send(self, code, body: bytes, ctype="application/json", extra=None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -456,6 +471,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        if not self._local_only():
+            return self._forbid()
         if u.path == "/api/state":
             return self._guard(state)
         if u.path == "/api/window":
@@ -488,6 +505,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        if not self._local_only():
+            return self._forbid()
         try:
             body = self._body()
         except ValueError as e:
